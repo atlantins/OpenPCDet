@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict # 当字典中的key不存在但被查找时，返回默认值，而不是keyError
 from pathlib import Path
 
 import numpy as np
@@ -13,30 +13,32 @@ from .processor.point_feature_encoder import PointFeatureEncoder
 class DatasetTemplate(torch_data.Dataset):
     def __init__(self, dataset_cfg=None, class_names=None, training=True, root_path=None, logger=None):
         super().__init__()
-        self.dataset_cfg = dataset_cfg
-        self.training = training
-        self.class_names = class_names
-        self.logger = logger
-        self.root_path = root_path if root_path is not None else Path(self.dataset_cfg.DATA_PATH)
-        self.logger = logger
+        self.dataset_cfg = dataset_cfg  # 数据集配置文件
+        self.training = training        # 训练模式
+        self.class_names = class_names  # 类别
+        self.logger = logger            # 日志
+        self.root_path = root_path if root_path is not None else Path(self.dataset_cfg.DATA_PATH)  # 数据集根目录
         if self.dataset_cfg is None or class_names is None:
             return
 
-        self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
+        self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)   # 点云范围
+        # 创建点云特征编码器
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
             point_cloud_range=self.point_cloud_range
         )
+        # 创建数据增强器类
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
         ) if self.training else None
+        # 创建数据预处理器类
         self.data_processor = DataProcessor(
             self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range,
             training=self.training, num_point_features=self.point_feature_encoder.num_point_features
         )
 
-        self.grid_size = self.data_processor.grid_size
-        self.voxel_size = self.data_processor.voxel_size
+        self.grid_size = self.data_processor.grid_size  # 网格数量 = 点云范围 /体素大小
+        self.voxel_size = self.data_processor.voxel_size # 体素大小
         self.total_epochs = 0
         self._merge_all_iters_to_one_epoch = False
 
@@ -47,18 +49,28 @@ class DatasetTemplate(torch_data.Dataset):
             
     @property
     def mode(self):
+        """@property 可以让对象像访问属性一样区访问方法 self.mode"""
         return 'train' if self.training else 'test'
 
     def __getstate__(self):
+        """
+        Return state values to be pickled
+        获取对象的属性（__init__中定义的属性,可以使用self.__dict__获取），返回去掉'logger'的属性dict
+        """
         d = dict(self.__dict__)
         del d['logger']
         return d
 
     def __setstate__(self, d):
+        # 根据字典d更新类的属性值
         self.__dict__.update(d)
 
     def generate_prediction_dicts(self, batch_dict, pred_dicts, class_names, output_path=None):
+        # @staticmethod不需要表示自身对象的self和自身类的cls参数，就和使用函数一样
+        # @classmethod也不需要self参数，但第一个参数需要是表示自身类的cls参数
+
         """
+
         Args:
             batch_dict:
                 frame_id:
@@ -107,6 +119,9 @@ class DatasetTemplate(torch_data.Dataset):
         return annos
 
     def merge_all_iters_to_one_epoch(self, merge=True, epochs=None):
+        """
+        合并所有的iters到一个epoch中
+        """
         if merge:
             self._merge_all_iters_to_one_epoch = True
             self.total_epochs = epochs
@@ -114,6 +129,7 @@ class DatasetTemplate(torch_data.Dataset):
             self._merge_all_iters_to_one_epoch = False
 
     def __len__(self):
+        # 类似c++中的虚函数，子类如果继承必须重写
         raise NotImplementedError
 
     def __getitem__(self, index):
@@ -131,6 +147,7 @@ class DatasetTemplate(torch_data.Dataset):
         raise NotImplementedError
 
     def prepare_data(self, data_dict):
+        # 接受统一坐标系下的数据字典（points，box和class），进行数据筛选，数据预处理，包括数据增强，点云编码等
         """
         Args:
             data_dict:
@@ -153,6 +170,8 @@ class DatasetTemplate(torch_data.Dataset):
         """
         if self.training:
             assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
+            # 返回一个bool数组，记录自定义数据集中ground_truth_name列表在不在我们需要检测的类别列表self.class_name里面
+            # 比如kitti数据集中data_dict['gt_names']='car','person','cyclist'
             gt_boxes_mask = np.array([n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
             
             if 'calib' in data_dict:
@@ -165,17 +184,26 @@ class DatasetTemplate(torch_data.Dataset):
             )
             if 'calib' in data_dict:
                 data_dict['calib'] = calib
+
+        # 筛选需要检测的gt_boxes
         if data_dict.get('gt_boxes', None) is not None:
+            # 返回data_dict[gt_names]中存在于class_name的下标(np.array)
             selected = common_utils.keep_arrays_by_name(data_dict['gt_names'], self.class_names)
+            # 根据selected，选取需要的gt_boxes和gt_names
             data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
             data_dict['gt_names'] = data_dict['gt_names'][selected]
+            # 将当帧数据的gt_names中的类别名称对应到class_names的下标
+            # 举个栗子，我们要检测的类别class_names = 'car','person'
+            # 对于当前帧，类别gt_names = 'car', 'person', 'car', 'car'，当前帧出现了3辆车，一个人，获取索引后，gt_classes = 1, 2, 1, 1
             gt_classes = np.array([self.class_names.index(n) + 1 for n in data_dict['gt_names']], dtype=np.int32)
             gt_boxes = np.concatenate((data_dict['gt_boxes'], gt_classes.reshape(-1, 1).astype(np.float32)), axis=1)
             data_dict['gt_boxes'] = gt_boxes
 
+            # 如果box2d不同，根据selected，选取需要的box2d
             if data_dict.get('gt_boxes2d', None) is not None:
                 data_dict['gt_boxes2d'] = data_dict['gt_boxes2d'][selected]
 
+        # 使用点的哪些属性 比如x,y,z等
         if data_dict.get('points', None) is not None:
             data_dict = self.point_feature_encoder.forward(data_dict)
 
