@@ -23,7 +23,7 @@ class KittiDataset(DatasetTemplate):
         super().__init__(
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
-        #查看是训练集还是验证集
+        # 查看是训练集还是验证集
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
         # root_path的路径是../data/kitti/
         # kitti数据集一共三个文件夹“training”和“testing”、“ImageSets”
@@ -51,6 +51,7 @@ class KittiDataset(DatasetTemplate):
         'train': [kitti_infos_train.pkl],
         'test': [kitti_infos_val.pkl],}
         '''
+
         for info_path in self.dataset_cfg.INFO_PATH[mode]:
             # root_path的路径是/data/kitti/
             info_path = self.root_path / info_path
@@ -62,7 +63,7 @@ class KittiDataset(DatasetTemplate):
                 # pickle.load(f) 将该文件中的数据解析为一个Python对象infos，
                 # 并将该内容添加到kitti_infos列表中
                 infos = pickle.load(f)
-                kitti_infos.extend(infos)
+                kitti_infos.extend(infos) # 这是把其不作为一个数组，而是作为一些值加入！！
 
         self.kitti_infos.extend(kitti_infos)
 
@@ -421,9 +422,7 @@ class KittiDataset(DatasetTemplate):
                 pred_labels: (N), Tensor   预测的类比
             class_names:
             output_path:
-
         Returns:
-
         """
 
         # 获取预测后的模板字典pred_dict，全部定义为全零的向量

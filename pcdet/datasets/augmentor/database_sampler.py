@@ -367,12 +367,12 @@ class DataBaseSampler(object):
         gt_boxes = data_dict['gt_boxes'][gt_boxes_mask]
         gt_names = data_dict['gt_names'][gt_boxes_mask]
         points = data_dict['points']
-        if self.sampler_cfg.get('USE_ROAD_PLANE', False) and mv_height is None:
-            sampled_gt_boxes, mv_height = self.put_boxes_on_road_planes(
-                sampled_gt_boxes, data_dict['road_plane'], data_dict['calib']
-            )
-            data_dict.pop('calib')
-            data_dict.pop('road_plane')
+        # if self.sampler_cfg.get('USE_ROAD_PLANE', False) and mv_height is None:
+        #     sampled_gt_boxes, mv_height = self.put_boxes_on_road_planes(
+        #         sampled_gt_boxes, data_dict['road_plane'], data_dict['calib']
+        #     )
+        #     data_dict.pop('calib')
+        #     data_dict.pop('road_plane')
 
         obj_points_list = []
 
@@ -400,9 +400,9 @@ class DataBaseSampler(object):
             assert obj_points.shape[0] == info['num_points_in_gt']
             obj_points[:, :3] += info['box3d_lidar'][:3].astype(np.float32)
 
-            if self.sampler_cfg.get('USE_ROAD_PLANE', False):
-                # mv height
-                obj_points[:, 2] -= mv_height[idx]
+            # if self.sampler_cfg.get('USE_ROAD_PLANE', False):
+            #     # mv height
+            #     obj_points[:, 2] -= mv_height[idx]
 
             if self.img_aug_type is not None:
                 img_aug_gt_dict, obj_points = self.collect_image_crops(

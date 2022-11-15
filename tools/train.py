@@ -53,11 +53,11 @@ def parse_config():
     args = parser.parse_args()
 
     cfg_from_yaml_file(args.cfg_file, cfg)
-    cfg.TAG = Path(args.cfg_file).stem
+    cfg.TAG = Path(args.cfg_file).stem  # 最后一个路径组件，除去后缀 eg:pointpillar
     cfg.EXP_GROUP_PATH = '/'.join(args.cfg_file.split('/')[1:-1])  # remove 'cfgs' and 'xxxx.yaml'
 
     if args.set_cfgs is not None:
-        cfg_from_list(args.set_cfgs, cfg)
+        cfg_from_list(args.set_cfgs, cfg)  # 通过list设置config
 
     return args, cfg
 
@@ -77,7 +77,7 @@ def main():
         args.batch_size = cfg.OPTIMIZATION.BATCH_SIZE_PER_GPU
     else:
         assert args.batch_size % total_gpus == 0, 'Batch size should match the number of gpus'
-        args.batch_size = args.batch_size // total_gpus
+        args.batch_size = args.batch_size // total_gpus # 根据GPU数量计算batch_size
 
     args.epochs = cfg.OPTIMIZATION.NUM_EPOCHS if args.epochs is None else args.epochs
 
@@ -86,10 +86,15 @@ def main():
 
     output_dir = cfg.ROOT_DIR / 'output' / cfg.EXP_GROUP_PATH / cfg.TAG / args.extra_tag
     ckpt_dir = output_dir / 'ckpt'
+
+    # 创建文件夹
+    # parents：如果父目录不存在，是否创建父目录
+    # exist_ok：只有在目录不存在时创建目录，目录已存在时不会抛出异常
     output_dir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = output_dir / ('log_train_%s.txt' % datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+
     logger = common_utils.create_logger(log_file, rank=cfg.LOCAL_RANK)
 
     # log to file
@@ -99,15 +104,22 @@ def main():
 
     if dist_train:
         logger.info('total_batch_size: %d' % (total_gpus * args.batch_size))
+
+    # 如果是单卡训练则记录命令行参数值
     for key, val in vars(args).items():
         logger.info('{:16} {}'.format(key, val))
     log_config_to_file(cfg, logger=logger)
+
+    # 如果单GPU训练，复制配置文件
     if cfg.LOCAL_RANK == 0:
         os.system('cp %s %s' % (args.cfg_file, output_dir))
 
+    # 初始化tensorboard
     tb_log = SummaryWriter(log_dir=str(output_dir / 'tensorboard')) if cfg.LOCAL_RANK == 0 else None
 
     # -----------------------create dataloader & network & optimizer---------------------------
+
+    # 1.构建dataset, dataloader, sampler
     train_set, train_loader, train_sampler = build_dataloader(
         dataset_cfg=cfg.DATA_CONFIG,
         class_names=cfg.CLASS_NAMES,
@@ -120,13 +132,17 @@ def main():
         seed=666 if args.fix_random_seed else None
     )
 
+    # 2.构建网络
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=train_set)
+    # 如果设置了BN同步则进行同步设置
     if args.sync_bn:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda()
 
+    # 3.构建优化器
     optimizer = build_optimizer(model, cfg.OPTIMIZATION)
 
+    # 4.如果可能，尽量加载之前的模型权重
     # load checkpoint if it is possible
     start_epoch = it = 0
     last_epoch = -1
