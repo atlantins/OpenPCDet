@@ -54,7 +54,7 @@ class SparseBasicBlock(spconv.SparseModule):
         identity = x
 
         out = self.conv1(x)
-        #版本2是可以read的，但是进行修改原来的属性.features需要进行更改为
+        # 版本2是可以read的，但是进行修改原来的属性.features需要进行更改为
         # x.features = F.relu(x.features)->x = x.replace_feature(F.relu(x.features))
         out = replace_feature(out, self.bn1(out.features))  # wtf   .Features代表tensor
         out = replace_feature(out, self.relu(out.features))
@@ -77,7 +77,7 @@ class VoxelBackBone8x(nn.Module):
         self.model_cfg = model_cfg
         norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
 
-        self.sparse_shape = grid_size[::-1] + [1, 0, 0] # [41, 1600, 1408] 在原始网格的高度方向上增加了一维
+        self.sparse_shape = grid_size[::-1] + [1, 0, 0] # [41, 1600, 1408],在原始网格的高度方向上增加了一维,self.sparse_shape=[41, 1600, 1480],这个是由kitti决定的
 
         self.conv_input = spconv.SparseSequential(
             spconv.SubMConv3d(input_channels, 16, 3, padding=1, bias=False, indice_key='subm1'),
@@ -162,8 +162,17 @@ class VoxelBackBone8x(nn.Module):
                在后面用out.dense才把这三个内容组合到一起了，变为密集型的张量
                spconv卷积的输入也是一样，输入和输出更像是一个  字典或者说元组
                注意卷积中pad与no_pad的区别
-        """
-
+               
+        （1）输入的特征是[voxels,3]通过索引indices[voxels，4],最后一个维度表示[b,w,h,l]的格子中。也就是其对应的坐标coor，作者在最开始就把坐标voxel化。
+        （2）spatial_shape大小为[41,1280,1056]，空间的总的size，对应着空间所有voxels（包含着没有点和存在点的voxel）41 × 1280 × 1056 = 55418880 
+                
+         # 对voxel_features按照coors进行索引，coors在之前的处理中加入例如batch这个位置，变成了四维
+        # 输出是一个【batch_size，channels, sparse_shape】的数据（2， 4， 40， 1600， 1408）
+        # 就是让数据按照coors里的坐标进行了排列，成为了标准的体素空间
+        x, point_misc = self.backbone(x, points_mean, is_test)
+        # x是backbone的输出，体素维度缩小8倍后的64维特征，point_misc包括几部分（mean cls reg）是auxiliary的输出，即预测出来的Seg和Center
+        
+        
         # 始终以SparseConvTensor的形式输出
         # 主要包括:
         # batch_size: batch size大小
@@ -173,6 +182,8 @@ class VoxelBackBone8x(nn.Module):
         # indice_dict{(tuple:5),}:0:输出索引，1:输入索引，2:输入Rulebook索引，3:输出Rulebook索引，4:spatial shape
         # sparity:稀疏率
         # 在heigh_compression.py中结合batch，spatial_shape、indice和feature将特征还原的对应位置，并在高度方向合并压缩至BEV特征图
+        """
+
 
         # [batch_size, 4, [41, 1600, 1408]] --> [batch_size, 16, [41, 1600, 1408]]
         x = self.conv_input(input_sp_tensor)  # （4, 4, 41, 1600, 1408）

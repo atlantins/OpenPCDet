@@ -175,7 +175,7 @@ class FarthestPointSampling(Function):
 
         B, N, _ = xyz.size()
         output = torch.cuda.IntTensor(B, npoint)
-        temp = torch.cuda.FloatTensor(B, N).fill_(1e10)
+        temp = torch.cuda.FloatTensor(B, N).fill_(1e10)  # 填充1e10
 
         pointnet2.farthest_point_sampling_wrapper(B, N, npoint, xyz, temp, output)
         return output
