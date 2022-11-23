@@ -85,28 +85,57 @@ class BaseBEVBackbone(nn.Module):
                 spatial_features
         Returns:
         """
+
+        """
+        经过HeightCompression得到的BEV特征图是：(batch_size, 128*2,  200, 176)
+        下采样分支一：(batch_size, 128*2, 200, 176) --> (batch, 128,  200, 176)
+        下采样分支二：(batch_size, 128*2, 200, 176) --> (batch, 128,  200, 176)
+        反卷积分支一：(batch, 128, 200, 176) --> (batch,  256,  200, 176)
+        反卷积分支二：(batch, 256, 100, 88) --> (batch,  256,  200, 176)
+        最终将结构在通道维度上进行拼接的特征图维度：(batch, 256 * 2, 200, 176)
+        """
+
         spatial_features = data_dict['spatial_features']
         ups = []
         ret_dict = {}
         x = spatial_features
-        for i in range(len(self.blocks)):
+        for i in range(len(self.blocks)): # 对不同的分支部分分别进行conv和deconv的操作
             x = self.blocks[i](x)
-
-            stride = int(spatial_features.shape[2] / x.shape[2])
+            """
+            SECOND中一共存在两个下采样分支，
+            分支一: (batch,128,200,176)
+            分支二: (batch,256,100,88)
+            """
+            stride = int(spatial_features.shape[2] / x.shape[2])  #  200/200
             ret_dict['spatial_features_%dx' % stride] = x
+
+            # 如果存在deconv，则对经过conv的结果进行反卷积操作
+            """
+            SECOND中存在两个下采样，则分别对两个下采样分支进行反卷积操作
+            分支一: (batch,128,200,176)-->(batch,256,200,176)
+            分支二: (batch,256,100,88)-->(batch,256,200,176)
+            """
             if len(self.deblocks) > 0:
                 ups.append(self.deblocks[i](x))
             else:
                 ups.append(x)
 
+        # 将上采样结果在通道维度拼接
         if len(ups) > 1:
+            """
+            最终经过所有上采样层得到的2个尺度的的信息
+            每个尺度的 shape 都是 (batch, 256, 200, 176)
+            在第一个维度上进行拼接得到x  维度是 (batch, 512, 200, 176)
+            """
             x = torch.cat(ups, dim=1)
         elif len(ups) == 1:
             x = ups[0]
 
+        # Fasle
         if len(self.deblocks) > len(self.blocks):
             x = self.deblocks[-1](x)
 
+        # 将结果存储在spatial_features_2d中并返回
         data_dict['spatial_features_2d'] = x
 
         return data_dict
