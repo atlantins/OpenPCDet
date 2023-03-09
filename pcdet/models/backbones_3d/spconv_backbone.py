@@ -77,7 +77,12 @@ class VoxelBackBone8x(nn.Module):
         self.model_cfg = model_cfg
         norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
 
-        self.sparse_shape = grid_size[::-1] + [1, 0, 0] # [41, 1600, 1408],在原始网格的高度方向上增加了一维,self.sparse_shape=[41, 1600, 1480],这个是由kitti决定的
+        # 对grid_size进行反向排列，
+        # POINT_CLOUD_RANGE: [0, -40, -3, 70.4, 40, 1] ：xmin,ymin,zmin,xmax,ymax,zmax
+        # VOXEL_SIZE: [0.05, 0.05, 0.1]
+
+        self.sparse_shape = grid_size[::-1] + [1, 0, 0] 
+        # [41, 1600, 1408],在原始网格的高度方向上增加了一维,self.sparse_shape=[41, 1600, 1480],这个是由kitti决定的 
 
         self.conv_input = spconv.SparseSequential(
             spconv.SubMConv3d(input_channels, 16, 3, padding=1, bias=False, indice_key='subm1'),

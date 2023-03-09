@@ -29,10 +29,10 @@ class MeanVFE(VFETemplate):
         voxel_features, voxel_num_points = batch_dict['voxels'], batch_dict['voxel_num_points']
 
         # 求voxel内所有点的值
-        #  shape (Batch*16000, 5, 4) -> (Batch*16000, 4)
+        #  shape (Batch*16000, 5, 4) -> (Batch*16000, 4) keppdim就变成了(b*16000, 1, 4)
         points_mean = voxel_features[:, :, :].sum(dim=1, keepdim=False)
 
-        # 正则化项， 保证每个voxel中最少有一个点，防止除0
+        # 正则化项， 保证每个voxel中最少有一个点，防止除0,     .view变成(b*n,1)
         normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
 
         # 求均值

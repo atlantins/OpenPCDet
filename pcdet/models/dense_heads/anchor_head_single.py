@@ -23,7 +23,8 @@ class AnchorHeadSingle(AnchorHeadTemplate):
             predict_boxes_when_training=predict_boxes_when_training
         )
 
-        # 每个点有3个尺度的个先验框  每个先验框都有两个方向（0度，90度） num_anchors_per_location:[2, 2, 2],每个类别有两个anchor然后这里计算每个地方一共多少个anchor
+        # 每个点都有3个尺度的个先验框  每个先验框都有两个方向（0度，90度） num_anchors_per_location:[2, 2, 2]
+        # 每个类别有两个anchor然后这里计算每个地方一共多少个anchor
         self.num_anchors_per_location = sum(self.num_anchors_per_location) # sum([2, 2, 2])
 
         # Conv2d(512,18,kernel_size=(1,1),stride=(1,1))
@@ -61,7 +62,8 @@ class AnchorHeadSingle(AnchorHeadTemplate):
         box_preds = self.conv_box(spatial_features_2d) # 每个坐标点上面6个先验框的参数预测 --> (batch_size, 42, W, H)
 
         cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
-        box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]  # 维度调整，将先验框调整参数放置在最后一维度   [N, H, W, C] --> (batch_size ,W, H, 42)
+        box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]  
+        # 维度调整，将先验框调整参数放置在最后一维度   [N, H, W, C] --> (batch_size ,W, H, 42)
 
         self.forward_ret_dict['cls_preds'] = cls_preds
         self.forward_ret_dict['box_preds'] = box_preds
