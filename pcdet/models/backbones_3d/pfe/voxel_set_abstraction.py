@@ -10,15 +10,18 @@ from ....utils import common_utils
 
 def bilinear_interpolate_torch(im, x, y):
     """
+    x0,x1,y0,y1就是包围那个点的正方形
     Args:
-        im: (H, W, C) [y, x]
+        im: (H, W, C) [y, x] # img
         x: (N)
         y: (N)
 
     Returns:  point_bev_features: (N1 + N2 + ..., C)
 
     """
-    x0 = torch.floor(x).long()
+    x0 = torch.floor(x).long() 
+    # floor取不大于元素的最大整数
+    # torch.Tensor默认是torch.FloatTensor是32位浮点类型数据，torch.LongTensor是64位整型
     x1 = x0 + 1
 
     y0 = torch.floor(y).long()
@@ -29,6 +32,7 @@ def bilinear_interpolate_torch(im, x, y):
     y0 = torch.clamp(y0, 0, im.shape[0] - 1)
     y1 = torch.clamp(y1, 0, im.shape[0] - 1)
 
+    # 这里是取到对应点的值，也就是四个角的像素的C
     Ia = im[y0, x0]
     Ib = im[y1, x0]
     Ic = im[y0, x1]
@@ -38,12 +42,15 @@ def bilinear_interpolate_torch(im, x, y):
     wb = (x1.type_as(x) - x) * (y - y0.type_as(y))
     wc = (x - x0.type_as(x)) * (y1.type_as(y) - y)
     wd = (x - x0.type_as(x)) * (y - y0.type_as(y))
+
+    #因为下面除的是(x2-x1),(y2-y1),所以都是1
     ans = torch.t((torch.t(Ia) * wa)) + torch.t(torch.t(Ib) * wb) + torch.t(torch.t(Ic) * wc) + torch.t(torch.t(Id) * wd)
     return ans
 
 
 def sample_points_with_roi(rois, points, sample_radius_with_roi, num_max_points_of_part=200000):
     """
+    找到对应的点进行保存
     Args:
         rois: (M, 7 + C)
         points: (N, 3)
@@ -54,8 +61,11 @@ def sample_points_with_roi(rois, points, sample_radius_with_roi, num_max_points_
         sampled_points: (N_out, 3)
     """
     if points.shape[0] < num_max_points_of_part:
+        # 计算每个点到每个proposal的欧式距离： (num_of_raw_points, num_of_proposal) .norm是求范数，默认求2范数
         distance = (points[:, None, :] - rois[None, :, 0:3]).norm(dim=-1)
+        # 计算每个raw_point距离自己最近proposal的点的距离和索引
         min_dis, min_dis_roi_idx = distance.min(dim=-1)
+        # 
         roi_max_dim = (rois[min_dis_roi_idx, 3:6] / 2).norm(dim=-1)
         point_mask = min_dis < roi_max_dim + sample_radius_with_roi
     else:
@@ -70,6 +80,9 @@ def sample_points_with_roi(rois, points, sample_radius_with_roi, num_max_points_
             start_idx += num_max_points_of_part
         point_mask = torch.cat(point_mask_list, dim=0)
 
+    # 如果所有的特征点都不被采样，则选择第一个点，根据 point_mask 的值选择相应的特征点，并将它们保存在 sampled_points 中。
+    # points[point_mask, :] 表示选择 points 中所有 point_mask 中为 True 的元素，并保留所有特征维度
+    # 即形状为 (num_sampled_points, num_features) 的张量，其中 num_sampled_points 是被选择的特征点数量。
     sampled_points = points[:1] if point_mask.sum() == 0 else points[point_mask, :]
 
     return sampled_points, point_mask
@@ -135,12 +148,16 @@ class VoxelSetAbstraction(nn.Module):
         self.SA_layer_names = []
         self.downsample_times_map = {}
         c_in = 0
+
         for src_name in self.model_cfg.FEATURES_SOURCE:
+            # 跳过bev和raw_point的处理
             if src_name in ['bev', 'raw_points']:
                 continue
             self.downsample_times_map[src_name] = SA_cfg[src_name].DOWNSAMPLE_FACTOR
 
             if SA_cfg[src_name].get('INPUT_CHANNELS', None) is None:
+                # 如果没有指定输入通道，则自己获取
+                # 是MLp的[0]是一个list，那么就取list中的[0]
                 input_channels = SA_cfg[src_name].MLPS[0][0] \
                     if isinstance(SA_cfg[src_name].MLPS[0], list) else SA_cfg[src_name].MLPS[0]
             else:
@@ -153,6 +170,7 @@ class VoxelSetAbstraction(nn.Module):
             self.SA_layer_names.append(src_name)
 
             c_in += cur_num_c_out
+
 
         if 'bev' in self.model_cfg.FEATURES_SOURCE:
             c_bev = num_bev_features
@@ -184,8 +202,11 @@ class VoxelSetAbstraction(nn.Module):
         Returns:
             point_bev_features: (N1 + N2 + ..., C)
         """
-        x_idxs = (keypoints[:, 1] - self.point_cloud_range[0]) / self.voxel_size[0] # 相当于是坐标系转换了，得到该关键点对应的voxel的x坐标 shape : (2048*batch,)
-        y_idxs = (keypoints[:, 2] - self.point_cloud_range[1]) / self.voxel_size[1] # 得到该关键点对应的voxel的y坐标 shape : (2048*batch,)
+
+        x_idxs = (keypoints[:, 1] - self.point_cloud_range[0]) / self.voxel_size[0] 
+        # 相当于是坐标系转换了，得到该关键点对应的voxel的x坐标 shape : (2048*batch,)
+        y_idxs = (keypoints[:, 2] - self.point_cloud_range[1]) / self.voxel_size[1] 
+        # 得到该关键点对应的voxel的y坐标 shape : (2048*batch,)
 
         x_idxs = x_idxs / bev_stride  # x坐标除下采样倍数 shape : (2048*batch,)
         y_idxs = y_idxs / bev_stride  # y坐标除下采样倍数 shape : (2048*batch,)
@@ -196,6 +217,7 @@ class VoxelSetAbstraction(nn.Module):
 
             cur_x_idxs = x_idxs[bs_mask]  # 取出属于当前帧关键点的x坐标
             cur_y_idxs = y_idxs[bs_mask]  # 取出属于当前帧关键点的y坐标
+
             cur_bev_features = bev_features[k].permute(1, 2, 0)  # (H, W, C) 对当前帧的BEV特征图进行维度转换 (C, 200, 176)  --> (200, 176, C)
             point_bev_features = bilinear_interpolate_torch(cur_bev_features, cur_x_idxs, cur_y_idxs) # 通过双线性插值获得关键点的特征  shape (2048, C)
             point_bev_features_list.append(point_bev_features)
@@ -226,6 +248,7 @@ class VoxelSetAbstraction(nn.Module):
 
     def get_sampled_points(self, batch_dict):
         """
+        shape : (batch*2048, 4)  , 4-->batch_idx, x, y, z
         Args:
             batch_dict:
 
@@ -287,7 +310,7 @@ class VoxelSetAbstraction(nn.Module):
             filter_neighbors_with_roi=False, radius_of_neighbor=None, num_max_points_of_part=200000, rois=None
     ):
         """
-
+        就是做pooling的一个函数
         Args:
             aggregate_func:
             xyz: (N, 3)
@@ -350,15 +373,36 @@ class VoxelSetAbstraction(nn.Module):
             point_coords: (N, 4)
 
         """
+        # fps采样
         keypoints = self.get_sampled_points(batch_dict)
 
+        """
+        ============================
+        Extended VSA中对BEV插值SA操作
+        ============================
+        """
         point_features_list = []
         if 'bev' in self.model_cfg.FEATURES_SOURCE:
+            # 通过对BEV的特征进行插值获取关键点的特征数据
             point_bev_features = self.interpolate_from_bev_features(
-                keypoints, batch_dict['spatial_features'], batch_dict['batch_size'],
+                # 所有的关键点
+                keypoints, 
+                # 高度堆叠后的bev特征图
+                batch_dict['spatial_features'],
+                batch_dict['batch_size'],
+                # 高度堆叠后的bev特征图的下采样倍数，默认8倍
                 bev_stride=batch_dict['spatial_features_stride']
             )
             point_features_list.append(point_bev_features)
+
+        batch_size = batch_dict['batch_size']
+        # 取出所有关键点的xyz坐标
+        new_xyz = keypoints[:, 1:4].contiguous()
+        # 存储每帧点云关键点的个数
+        new_xyz_batch_cnt = new_xyz.new_zeros(batch_size).int() 
+        # 获取batch中每帧点云中关键点的个数
+        for k in range(batch_size):   
+            new_xyz_batch_cnt[k] = (keypoints[:, 0] == k).sum()
 
         """
         所有SA层的配置中MLPS为1*1的卷积，DOWNSAMPLE_FACTOR该层对应的下采样倍数
@@ -377,13 +421,6 @@ class VoxelSetAbstraction(nn.Module):
         ============================
         """
 
-        batch_size = batch_dict['batch_size']
-
-        new_xyz = keypoints[:, 1:4].contiguous()
-        new_xyz_batch_cnt = new_xyz.new_zeros(batch_size).int() # 存储每帧点云关键点的个数
-        for k in range(batch_size):   # 获取batch中每帧点云中关键点的个数
-            new_xyz_batch_cnt[k] = (keypoints[:, 0] == k).sum()
-
         if 'raw_points' in self.model_cfg.FEATURES_SOURCE:
             raw_points = batch_dict['points']  # 得到所有一批数据中所有原始点云数据 shape （N, 5） batch_id, x, y, z, r
             # pooled_features: (2048 * batch, 32)
@@ -392,7 +429,8 @@ class VoxelSetAbstraction(nn.Module):
                 xyz=raw_points[:, 1:4],
                 xyz_features=raw_points[:, 4:].contiguous() if raw_points.shape[1] > 4 else None, # 每个原始点云的 reflect intensity
                 xyz_bs_idxs=raw_points[:, 0], # 每个点所在batch中的索引
-                new_xyz=new_xyz, new_xyz_batch_cnt=new_xyz_batch_cnt,  # 一批数据中关键点的个数
+                new_xyz=new_xyz,  # 关键点的shape(2048,3)
+                new_xyz_batch_cnt=new_xyz_batch_cnt,  # 一批数据中关键点的个数
                 filter_neighbors_with_roi=self.model_cfg.SA_LAYER['raw_points'].get('FILTER_NEIGHBOR_WITH_ROI', False),
                 radius_of_neighbor=self.model_cfg.SA_LAYER['raw_points'].get('RADIUS_OF_NEIGHBOR_WITH_ROI', None),
                 rois=batch_dict.get('rois', None)
@@ -430,23 +468,33 @@ class VoxelSetAbstraction(nn.Module):
         """
 
         for k, src_name in enumerate(self.SA_layer_names):
-            cur_coords = batch_dict['multi_scale_3d_features'][src_name].indices # 获取非空voxel的xyz的index shape : (16000*batch, 4) 16000为训练中选取的最大非空voxel数 4-->(batch_idx, z, y, x)
-            cur_features = batch_dict['multi_scale_3d_features'][src_name].features.contiguous() # 获取非空voexel的特征
+            cur_coords = batch_dict['multi_scale_3d_features'][src_name].indices 
+            # 获取非空voxel的xyz的index shape : (16000*batch, 4) 
+            # 16000为训练中选取的最大非空voxel数 
+            # 4-->(batch_idx, z, y, x)
+            cur_features = batch_dict['multi_scale_3d_features'][src_name].features.contiguous() 
+            # 获取非空voexel的特征
 
-            xyz = common_utils.get_voxel_centers(  # 获取每个voxel在点云坐标系中xyz的中心点坐标 (16000*batch, 3)
+            # 获取每个voxel在点云坐标系中xyz的中心点坐标 (16000*batch, 3)
+            xyz = common_utils.get_voxel_centers(  
                 cur_coords[:, 1:4], downsample_times=self.downsample_times_map[src_name],
                 voxel_size=self.voxel_size, point_cloud_range=self.point_cloud_range
             )
+
             # VSA操作
             pooled_features = self.aggregate_keypoint_features_from_one_source(
-                batch_size=batch_size, aggregate_func=self.SA_layers[k], # 第K层上的SA网络
-                xyz=xyz.contiguous(), xyz_features=cur_features, xyz_bs_idxs=cur_coords[:, 0], # 所有voxel在点云坐标系下中心点的坐标 所有voxel在第K层的特征 mask
-                new_xyz=new_xyz, new_xyz_batch_cnt=new_xyz_batch_cnt, # 关键点坐标 (2048, 3) 关键点个数
+                batch_size=batch_size, 
+                aggregate_func=self.SA_layers[k], # 第K层上的SA网络
+                xyz=xyz.contiguous(),  # 所有voxel在点云坐标系下中心点的坐标
+                xyz_features=cur_features, # 所有voxel在第K层的特征
+                xyz_bs_idxs=cur_coords[:, 0],  # 所有点在batch中的mask
+                new_xyz=new_xyz,  # 关键点坐标 (2048, 3)
+                new_xyz_batch_cnt=new_xyz_batch_cnt, # 关键点个数
                 filter_neighbors_with_roi=self.model_cfg.SA_LAYER[src_name].get('FILTER_NEIGHBOR_WITH_ROI', False),
                 radius_of_neighbor=self.model_cfg.SA_LAYER[src_name].get('RADIUS_OF_NEIGHBOR_WITH_ROI', None),
                 rois=batch_dict.get('rois', None)
             )
-
+            # 得到的pooled_features 维度为 (2048 * batch, C)
             point_features_list.append(pooled_features)
 
         """
@@ -459,12 +507,24 @@ class VoxelSetAbstraction(nn.Module):
                 (2048 * batch, 128) x_conv4 第四次稀疏卷积后特征数据
                 ]
         """
-
-        point_features = torch.cat(point_features_list, dim=-1) # point_features (2048 * batch, 640)
+        # point_features (2048 * batch, 640)
+        point_features = torch.cat(point_features_list, dim=-1) 
 
         batch_dict['point_features_before_fusion'] = point_features.view(-1, point_features.shape[-1])
-        point_features = self.vsa_point_feature_fusion(point_features.view(-1, point_features.shape[-1]))
 
+        """
+        将不同尺度拼接的特征使用一个简单的MLP网络对处在不同尺度的特征进行聚合
+        vsa_point_feature_fusion
+        Sequential(
+          (0): Linear(in_features=640, out_features=128, bias=False)
+          (1): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (2): ReLU()
+        )
+        """
+        # point_features (2048 * batch, 640)-->(2048 * batch, 128)
+        point_features = self.vsa_point_feature_fusion(point_features.view(-1, point_features.shape[-1]))
+        # (batch*2048, C)
         batch_dict['point_features'] = point_features  # (BxN, C)
+        # (batch*2048, 4)    4-->(batch_id, x, y, z)
         batch_dict['point_coords'] = keypoints  # (BxN, 4)
         return batch_dict
