@@ -6,6 +6,7 @@ from .vfe_template import VFETemplate
 
 
 class PFNLayer(nn.Module):
+
     def __init__(self,
                  in_channels,
                  out_channels,

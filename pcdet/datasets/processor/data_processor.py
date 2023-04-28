@@ -112,35 +112,82 @@ class DataProcessor(object):
             return partial(self.transform_points_to_voxels_placeholder, config=config)
         
         return data_dict
-        
+
+    def double_flip(self, points):
+        # y flip
+        points_yflip = points.copy()
+        points_yflip[:, 1] = -points_yflip[:, 1]
+
+        # x flip
+        points_xflip = points.copy()
+        points_xflip[:, 0] = -points_xflip[:, 0]
+
+        # x y flip
+        points_xyflip = points.copy()
+        points_xyflip[:, 0] = -points_xyflip[:, 0]
+        points_xyflip[:, 1] = -points_xyflip[:, 1]
+
+        return points_yflip, points_xflip, points_xyflip
+
     def transform_points_to_voxels(self, data_dict=None, config=None):
+        """
+        将点云转换为voxel,调用spconv的VoxelGeneratorV2
+         Kitti中点云截取范围为[ 0.,  -40.,   -3.,   70.4,  40.,    1. ]；
+         每个voxel的长宽高分别是[0.05, 0.05, 0.1]；
+         每个点云的特征维度是4 （x, y,  z,  reflect intensity）；
+         每个voxel中最大的采样点数为5；训练和推理时分别最大选取16k，40k个非空voxel。
+        """
         if data_dict is None:
-            grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.VOXEL_SIZE)
-            self.grid_size = np.round(grid_size).astype(np.int64)
-            self.voxel_size = config.VOXEL_SIZE
+            grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.VOXEL_SIZE) # 计算网格数量
+            self.grid_size = np.round(grid_size).astype(np.int64) # 取整
+            self.voxel_size = config.VOXEL_SIZE # voxel的大小
             # just bind the config, we will create the VoxelGeneratorWrapper later,
             # to avoid pickling issues in multiprocess spawn
             return partial(self.transform_points_to_voxels, config=config)
 
         if self.voxel_generator is None:
             self.voxel_generator = VoxelGeneratorWrapper(
-                vsize_xyz=config.VOXEL_SIZE,
-                coors_range_xyz=self.point_cloud_range,
-                num_point_features=self.num_point_features,
-                max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
+                vsize_xyz=config.VOXEL_SIZE,  # [0.16, 0.16, 4]
+                coors_range_xyz=self.point_cloud_range, # [0, -39.68, -3, 69.12, 39.68, 1]
+                num_point_features=self.num_point_features, # 32
+                max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL, #16000
                 max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
             )
 
         points = data_dict['points']
         voxel_output = self.voxel_generator.generate(points)
         voxels, coordinates, num_points = voxel_output
+        """
+            voxels: (num_voxels, max_points_per_voxel, 3 + C)
+            coordinates: (num_voxels, 3)
+            num_points: (num_voxels)
+        """
 
         if not data_dict['use_lead_xyz']:
             voxels = voxels[..., 3:]  # remove xyz in voxels(N, 3)
 
-        data_dict['voxels'] = voxels
-        data_dict['voxel_coords'] = coordinates
-        data_dict['voxel_num_points'] = num_points
+        if config.get('DOUBLE_FLIP', False):
+            voxels_list, voxel_coords_list, voxel_num_points_list = [voxels], [coordinates], [num_points]
+            points_yflip, points_xflip, points_xyflip = self.double_flip(points)
+            points_list = [points_yflip, points_xflip, points_xyflip]
+            keys = ['yflip', 'xflip', 'xyflip']
+            for i, key in enumerate(keys):
+                voxel_output = self.voxel_generator.generate(points_list[i])
+                voxels, coordinates, num_points = voxel_output
+
+                if not data_dict['use_lead_xyz']:
+                    voxels = voxels[..., 3:]
+                voxels_list.append(voxels)
+                voxel_coords_list.append(coordinates)
+                voxel_num_points_list.append(num_points)
+
+            data_dict['voxels'] = voxels_list
+            data_dict['voxel_coords'] = voxel_coords_list
+            data_dict['voxel_num_points'] = voxel_num_points_list
+        else:
+            data_dict['voxels'] = voxels
+            data_dict['voxel_coords'] = coordinates
+            data_dict['voxel_num_points'] = num_points
         return data_dict
 
     def sample_points(self, data_dict=None, config=None):

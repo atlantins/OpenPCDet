@@ -30,6 +30,7 @@ class BallQuery(Function):
 
         B = xyz_batch_cnt.shape[0]
         M = new_xyz.shape[0]
+        # zero_是赋值都为0，M行，nsample列，因为要对M个新的xyz取nsample个点
         idx = torch.cuda.IntTensor(M, nsample).zero_()
 
         pointnet2.ball_query_wrapper(B, M, radius, nsample, new_xyz, new_xyz_batch_cnt, xyz, xyz_batch_cnt, idx)
@@ -134,6 +135,7 @@ class QueryAndGroup(nn.Module):
         Returns:
             new_features: (M1 + M2, C, nsample) tensor
         """
+        # 计算xyz的数量是否相同
         assert xyz.shape[0] == xyz_batch_cnt.sum(), 'xyz: %s, xyz_batch_cnt: %s' % (str(xyz.shape), str(new_xyz_batch_cnt))
         assert new_xyz.shape[0] == new_xyz_batch_cnt.sum(), \
             'new_xyz: %s, new_xyz_batch_cnt: %s' % (str(new_xyz.shape), str(new_xyz_batch_cnt))
@@ -175,7 +177,7 @@ class FarthestPointSampling(Function):
 
         B, N, _ = xyz.size()
         output = torch.cuda.IntTensor(B, npoint)
-        temp = torch.cuda.FloatTensor(B, N).fill_(1e10)
+        temp = torch.cuda.FloatTensor(B, N).fill_(1e10)  # 填充1e10
 
         pointnet2.farthest_point_sampling_wrapper(B, N, npoint, xyz, temp, output)
         return output

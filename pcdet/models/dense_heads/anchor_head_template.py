@@ -93,7 +93,7 @@ class AnchorHeadTemplate(nn.Module):
         Returns:
 
         """
-        targets_dict = self.target_assigner.assign_targets(
+        targets_dict = self.target_assigner.assign_targets( 
             self.anchors, gt_boxes
         )
         return targets_dict

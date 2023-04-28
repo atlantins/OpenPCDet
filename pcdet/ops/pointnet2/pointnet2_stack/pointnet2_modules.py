@@ -12,11 +12,13 @@ def build_local_aggregation_module(input_channels, config):
 
     if local_aggregation_name == 'StackSAModuleMSG':
         mlps = config.MLPS
+        # 对于每一层感知机，都将输入通道加入到列表的首位
         for k in range(len(mlps)):
             mlps[k] = [input_channels] + mlps[k]
         cur_layer = StackSAModuleMSG(
             radii=config.POOL_RADIUS, nsamples=config.NSAMPLE, mlps=mlps, use_xyz=True, pool_method='max_pool',
         )
+        # 计算输出通道数，为每一层感知输出通道之和
         num_c_out = sum([x[-1] for x in mlps])
     elif local_aggregation_name == 'VectorPoolAggregationModuleMSG':
         cur_layer = VectorPoolAggregationModuleMSG(input_channels=input_channels, config=config)
@@ -33,11 +35,11 @@ class StackSAModuleMSG(nn.Module):
                  use_xyz: bool = True, pool_method='max_pool'):
         """
         Args:
-            radii: list of float, list of radii to group with
-            nsamples: list of int, number of samples in each ball query
+            球半径 radii: list of float, list of radii to group with
+            采样点数 nsamples: list of int, number of samples in each ball query
             mlps: list of list of int, spec of the pointnet before the global pooling for each scale
             use_xyz:
-            pool_method: max_pool / avg_pool
+            池化的方法 pool_method: max_pool / avg_pool
         """
         super().__init__()
 
@@ -45,6 +47,8 @@ class StackSAModuleMSG(nn.Module):
 
         self.groupers = nn.ModuleList()
         self.mlps = nn.ModuleList()
+
+        # 向groupers中添加QueryAndGroup和MLP
         for i in range(len(radii)):
             radius = radii[i]
             nsample = nsamples[i]
@@ -54,6 +58,7 @@ class StackSAModuleMSG(nn.Module):
                 mlp_spec[0] += 3
 
             shared_mlps = []
+            # 对mlp_spec中的函数进行逐个的卷积
             for k in range(len(mlp_spec) - 1):
                 shared_mlps.extend([
                     nn.Conv2d(mlp_spec[k], mlp_spec[k + 1], kernel_size=1, bias=False),

@@ -57,6 +57,17 @@ def parse_config():
 
 def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False):
     # load checkpoint
+    """
+    评估单个checkpoint
+    Args:
+        model: 模型
+        test_loader: 测试集Dataloader
+        args: 命令行参数
+        eval_output_dir: 输出文件夹
+        logger: 日志
+        epoch_id: epoch id eg:80
+        dist_test:是否为分布式测试
+    """
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=dist_test, 
                                 pre_trained_path=args.pretrained_model)
     model.cuda()

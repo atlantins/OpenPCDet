@@ -270,8 +270,8 @@ class DataAugmentor(object):
         )
         # if 'calib' in data_dict:
         #     data_dict.pop('calib')
-        if 'road_plane' in data_dict:
-            data_dict.pop('road_plane')
+        # if 'road_plane' in data_dict:
+        #     data_dict.pop('road_plane')
         if 'gt_boxes_mask' in data_dict:
             gt_boxes_mask = data_dict['gt_boxes_mask']
             data_dict['gt_boxes'] = data_dict['gt_boxes'][gt_boxes_mask]
