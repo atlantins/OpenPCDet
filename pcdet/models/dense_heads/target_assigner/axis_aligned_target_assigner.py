@@ -15,10 +15,14 @@ class AxisAlignedTargetAssigner(object):
         self.match_height = match_height
         self.class_names = np.array(class_names)
         self.anchor_class_names = [config['class_name'] for config in anchor_generator_cfg]
+        # 前景、背景采样系数 PointPillars、SECOND不考虑
         self.pos_fraction = anchor_target_cfg.POS_FRACTION if anchor_target_cfg.POS_FRACTION >= 0 else None
+        # 总采样数  PointPillars不考虑
         self.sample_size = anchor_target_cfg.SAMPLE_SIZE
         self.norm_by_num_examples = anchor_target_cfg.NORM_BY_NUM_EXAMPLES
+        # 类别iou匹配为正样本阈值{'Car':0.6, 'Pedestrian':0.5, 'Cyclist':0.5}
         self.matched_thresholds = {}
+        # 类别iou匹配为正样本阈值{'Car':0.6, 'Pedestrian':0.5, 'Cyclist':0.5}
         self.unmatched_thresholds = {}
         for config in anchor_generator_cfg:
             self.matched_thresholds[config['class_name']] = config['matched_threshold']
@@ -151,16 +155,22 @@ class AxisAlignedTargetAssigner(object):
                 target_dict['reg_weights'] = torch.cat(target_dict['reg_weights'], dim=0).view(-1)
             else:
                 target_dict = {
+                    # feature_map_size:(1，200，176, 2）
                     'box_cls_labels': [t['box_cls_labels'].view(*feature_map_size, -1) for t in target_list],
+                    # (1，248，216, 2, 7)
                     'box_reg_targets': [t['box_reg_targets'].view(*feature_map_size, -1, self.box_coder.code_size)
                                         for t in target_list],
+                    # (1，248，216, 2)
                     'reg_weights': [t['reg_weights'].view(*feature_map_size, -1) for t in target_list]
                 }
+
+                # list : 3*anchor (1, 248, 216, 2, 7) --> (1, 248, 216, 6, 7) -> (321408, 7)
                 target_dict['box_reg_targets'] = torch.cat(
                     target_dict['box_reg_targets'], dim=-2
                 ).view(-1, self.box_coder.code_size)
-
+                # list:3 (1, 248, 216, 2) --> (1，248, 216, 6) -> (1*248*216*6, )
                 target_dict['box_cls_labels'] = torch.cat(target_dict['box_cls_labels'], dim=-1).view(-1)
+                # list:3 (1, 200, 176, 2) --> (1, 200, 176, 6) -> (1*248*216*6, )
                 target_dict['reg_weights'] = torch.cat(target_dict['reg_weights'], dim=-1).view(-1)
             # 将结果填入对应的容器
             bbox_targets.append(target_dict['box_reg_targets'])

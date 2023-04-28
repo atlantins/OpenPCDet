@@ -83,19 +83,19 @@ def boxes_iou3d_gpu(boxes_a, boxes_b):
 
 def nms_gpu(boxes, scores, thresh, pre_maxsize=None, **kwargs):
     """
-    :param boxes: (N, 7) [x, y, z, dx, dy, dz, heading]
-    :param scores: (N)
+    :param boxes: (N, 7) [x, y, z, dx, dy, dz, heading] 经过筛选的anchor的7个回归预测结果
+    :param scores: (N) 经过筛选的anchor的类别，与boxes一一对应
     :param thresh:
     :return:
     """
     assert boxes.shape[1] == 7
-    order = scores.sort(0, descending=True)[1]
-    if pre_maxsize is not None:
+    order = scores.sort(0, descending=True)[1] # 对分数按列降序排序(从大到小)，并取出对应索引
+    if pre_maxsize is not None: # 如果存在NMS前的最大box数量（4096），则取出前4096个box索引
         order = order[:pre_maxsize]
 
     boxes = boxes[order].contiguous()
     keep = torch.LongTensor(boxes.size(0))
-    num_out = iou3d_nms_cuda.nms_gpu(boxes, keep, thresh)
+    num_out = iou3d_nms_cuda.nms_gpu(boxes, keep, thresh) # 经过iou3d_nms_cuda之后，之所以要取前num_out个数的原因是keep初始化的最大长度是4096
     return order[keep[:num_out].cuda()].contiguous(), None
 
 

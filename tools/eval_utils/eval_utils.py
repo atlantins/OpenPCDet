@@ -10,6 +10,15 @@ from pcdet.utils import common_utils
 
 
 def statistics_info(cfg, ret_dict, metric, disp_dict):
+    """
+    统计信息
+    Args:
+        cfg:配置文件
+        ret_dict:结果字典
+        metric:度量字典
+        disp_dict:展示字典
+    """
+    # [0.3,0.5,0.7]根据不同的阈值进行累加
     for cur_thresh in cfg.MODEL.POST_PROCESSING.RECALL_THRESH_LIST:
         metric['recall_roi_%s' % str(cur_thresh)] += ret_dict.get('roi_%s' % str(cur_thresh), 0)
         metric['recall_rcnn_%s' % str(cur_thresh)] += ret_dict.get('rcnn_%s' % str(cur_thresh), 0)
@@ -20,6 +29,20 @@ def statistics_info(cfg, ret_dict, metric, disp_dict):
 
 
 def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=False, result_dir=None):
+    """
+    模型评估
+    Args:
+        cfg:配置文件
+        model:模型
+        dataloader: 数据加载器
+        epoch_id：epoch的id
+        logger:日志记录器
+        dist_test:分布式测试
+        save_to_file: 保存到文件
+        result_dir: 结果文件夹:OpenPCDet/output/kitti_models/pointpillar/default/eval/epoch_80/val/default
+    Returns:
+        ret_dict: 结果字典
+    """
     result_dir.mkdir(parents=True, exist_ok=True)
 
     final_output_dir = result_dir / 'final_result' / 'data'

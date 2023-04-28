@@ -4,6 +4,8 @@ import torch.nn as nn
 
 from ...utils.spconv_utils import replace_feature, spconv
 
+# sparse 用来res结构
+# post_act_block用来升维
 
 def post_act_block(in_channels, out_channels, kernel_size, indice_key=None, stride=1, padding=0,
                    conv_type='subm', norm_fn=None):

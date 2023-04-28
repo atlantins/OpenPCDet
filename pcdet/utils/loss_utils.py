@@ -271,8 +271,8 @@ def neg_loss_cornernet(pred, gt, mask=None):
         mask: (batch x h x w)
     Returns:
     """
-    pos_inds = gt.eq(1).float()
-    neg_inds = gt.lt(1).float()
+    pos_inds = gt.eq(1).float()  # 正样本：eq函数是遍历gt这个tensor每个element，和1比较，如果等于1，则返回1，否则返回0
+    neg_inds = gt.lt(1).float()  # 负样本：遍历gt这个tensor每个element，和1比较，如果小于1，则返回1，否则返回0
 
     neg_weights = torch.pow(1 - gt, 4)
 
@@ -321,18 +321,18 @@ def _reg_loss(regr, gt_regr, mask):
         mask (batch x max_objects)
     Returns:
     """
-    num = mask.float().sum()
+    num = mask.float().sum()  # 统计mask的数量
     mask = mask.unsqueeze(2).expand_as(gt_regr).float()
-    isnotnan = (~ torch.isnan(gt_regr)).float()
-    mask *= isnotnan
-    regr = regr * mask
-    gt_regr = gt_regr * mask
+    isnotnan = (~ torch.isnan(gt_regr)).float()  # ~按位取反,包括符号位。正数各位取反变为负数，显示时转化为其补码，负数本身需要先转换为补码（符号位不变，各位取反再加 1），再对其补码进行各位去反
+    mask *= isnotnan  #将 mask 中 NaN 位置对应的元素清零
+    regr = regr * mask #将 regr 中 NaN 位置对应的元素清零
+    gt_regr = gt_regr * mask  #将 gt_regr 中 NaN 位置对应的元素清零
 
     loss = torch.abs(regr - gt_regr)
-    loss = loss.transpose(2, 0)
+    loss = loss.transpose(2, 0) # (batch x max_objects x dim) -> (dim x max_objects x batch)
 
-    loss = torch.sum(loss, dim=2)
-    loss = torch.sum(loss, dim=1)
+    loss = torch.sum(loss, dim=2) # 得到每个目标的回归损失
+    loss = torch.sum(loss, dim=1) # 得到所有目标的回归损失
     # else:
     #  # D x M x B
     #  loss = loss.reshape(loss.shape[0], -1)
@@ -344,9 +344,19 @@ def _reg_loss(regr, gt_regr, mask):
 
 
 def _gather_feat(feat, ind, mask=None):
+    """
+
+    Args:
+        feat:  [4,35200,8]
+        ind:   [4,500]
+
+    Returns:
+
+    """
+
     dim  = feat.size(2)
-    ind  = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
-    feat = feat.gather(1, ind)
+    ind  = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim) # [4,500,8]
+    feat = feat.gather(1, ind)  # 在dim维度上，按照indexs所给的坐标选择元素，返回一个和indexs维度相同大小的tensor
     if mask is not None:
         mask = mask.unsqueeze(2).expand_as(feat)
         feat = feat[mask]
@@ -355,9 +365,18 @@ def _gather_feat(feat, ind, mask=None):
 
 
 def _transpose_and_gather_feat(feat, ind):
-    feat = feat.permute(0, 2, 3, 1).contiguous()
-    feat = feat.view(feat.size(0), -1, feat.size(3))
-    feat = _gather_feat(feat, ind)
+    """
+
+    Args:
+        feat:[4,8,200,176]
+        ind:[4,500]
+
+    Returns:
+
+    """
+    feat = feat.permute(0, 2, 3, 1).contiguous() # [4,8,176,200]
+    feat = feat.view(feat.size(0), -1, feat.size(3)) # [4,35200,8]
+    feat = _gather_feat(feat, ind) # [4,500,8]
     return feat
 
 

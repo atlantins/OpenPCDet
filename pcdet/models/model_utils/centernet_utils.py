@@ -8,11 +8,20 @@ import numba
 
 def gaussian_radius(height, width, min_overlap=0.5):
     """
+    计算高斯分布的半径
     Args:
         height: (N)
         width: (N)
         min_overlap:
     Returns:
+    """
+    # 预测框两个角点在GT框的两个角点以r为半径的圆内，如何确定半径r，保证预测框与真值框的IOU大于一个阈值
+    """
+    1.一角点在真值框内,一角点在真值框外
+    最小IOU在预测框两个角点分别和和半径r的圆相外切和相内切时取得(例如可以固定某一角点在x方向不变,变动y方向观察相交、相并面积的变化情况)
+    因此我们只需要考虑“预测的框和GTbox两个角点以r为半径的圆一个边内切,一个边外切
+    min_overlap =(h-r)*(w-r)/(2*h*w-(h-r)*(w-r)) --> r
+    整理为r的一元二次方程: r^2 - (h+w)*r + (1-min_overlap)*h*w / (1+min_overlap) =0
     """
     a1 = 1
     b1 = (height + width)
@@ -36,16 +45,18 @@ def gaussian_radius(height, width, min_overlap=0.5):
 
 
 def gaussian2D(shape, sigma=1):
-    m, n = [(ss - 1.) / 2. for ss in shape]
-    y, x = np.ogrid[-m:m + 1, -n:n + 1]
+    # 计算高斯分布的边界
+    m, n = [(ss - 1.) / 2. for ss in shape]  # 计算中心点坐标
+    y, x = np.ogrid[-m:m + 1, -n:n + 1]  # 生成二维坐标系，并表示y和x方向的坐标范围
 
-    h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
-    h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))  # e^-(x^2+y^2)/2*&^2   只与点到中心点的位置有关
+    h[h < np.finfo(h.dtype).eps * h.max()] = 0  # np.finfo(h.dtype).eps表示h数组中最小的非负数，  finfo获得浮点类型的精度信息
     return h
 
 
 def draw_gaussian_to_heatmap(heatmap, center, radius, k=1, valid_mask=None):
-    diameter = 2 * radius + 1
+    # 在heatmap上画高斯分布，每一个类别一个heatmap，每一个点不是叠加，而是一直不断选最大值
+    diameter = 2 * radius + 1  # 因为半径为整数，直径为奇数时，中心点坐标可以被确定。
     gaussian = gaussian2D((diameter, diameter), sigma=diameter / 6)
 
     x, y = int(center[0]), int(center[1])
@@ -56,6 +67,7 @@ def draw_gaussian_to_heatmap(heatmap, center, radius, k=1, valid_mask=None):
     top, bottom = min(y, radius), min(height - y, radius + 1)
 
     masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+    # 将高斯分布结果约束在边界内
     masked_gaussian = torch.from_numpy(
         gaussian[radius - top:radius + bottom, radius - left:radius + right]
     ).to(heatmap.device).float()
@@ -64,7 +76,9 @@ def draw_gaussian_to_heatmap(heatmap, center, radius, k=1, valid_mask=None):
         if valid_mask is not None:
             cur_valid_mask = valid_mask[y - top:y + bottom, x - left:x + right]
             masked_gaussian = masked_gaussian * cur_valid_mask.float()
-
+        # 将高斯分布覆盖到heartmap上，相当于不断的在heartmap基础上添加关键点的高斯分布
+        # 即同一种类型的框会在一个heartmap 某一类类别通道上面不断添加
+        # 最终通过函数总体的for循环，相当于不断将目标画在heartmap
         torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
     return heatmap
 
@@ -116,6 +130,7 @@ def _circle_nms(boxes, min_radius, post_max_size=83):
 
 
 def _gather_feat(feat, ind, mask=None):
+    # 根据inds取feat
     dim = feat.size(2)
     ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
     feat = feat.gather(1, ind)
@@ -127,6 +142,7 @@ def _gather_feat(feat, ind, mask=None):
 
 
 def _transpose_and_gather_feat(feat, ind):
+    # 将特征维度变换，使用_gather_feat就是根据索引得到feat
     feat = feat.permute(0, 2, 3, 1).contiguous()
     feat = feat.view(feat.size(0), -1, feat.size(3))
     feat = _gather_feat(feat, ind)
@@ -134,17 +150,18 @@ def _transpose_and_gather_feat(feat, ind):
 
 
 def _topk(scores, K=40):
-    batch, num_class, height, width = scores.size()
+    # 返回heatmap里面最大的K个score，索引，类别，y坐标，x坐标
+    batch, num_class, height, width = scores.size() # 输入heatmap (4,3,200,176)
 
-    topk_scores, topk_inds = torch.topk(scores.flatten(2, 3), K)
+    topk_scores, topk_inds = torch.topk(scores.flatten(2, 3), K) # 选取前500个
 
-    topk_inds = topk_inds % (height * width)
-    topk_ys = (topk_inds // width).float()
-    topk_xs = (topk_inds % width).int().float()
+    topk_inds = topk_inds % (height * width)  # (4,3,500)
+    topk_ys = (topk_inds // width).float()    # (4,3,500)
+    topk_xs = (topk_inds % width).int().float() # (4,3,500)
 
-    topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K)
-    topk_classes = (topk_ind // K).int()
-    topk_inds = _gather_feat(topk_inds.view(batch, -1, 1), topk_ind).view(batch, K)
+    topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K) # 将多类的得分合并,选其中的前500
+    topk_classes = (topk_ind // K).int() # 获得前k个最大得分的类别
+    topk_inds = _gather_feat(topk_inds.view(batch, -1, 1), topk_ind).view(batch, K) #
     topk_ys = _gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, K)
     topk_xs = _gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, K)
 
@@ -155,6 +172,12 @@ def decode_bbox_from_heatmap(heatmap, rot_cos, rot_sin, center, center_z, dim,
                              point_cloud_range=None, voxel_size=None, feature_map_stride=None, vel=None, K=100,
                              circle_nms=False, score_thresh=None, post_center_limit_range=None):
     batch_size, num_class, _, _ = heatmap.size()
+    '''
+    这段代码实现了从检测头（heatmap, rot_cos, rot_sin, center, center_z, dim）中解码出物体的边界框（final_box_preds）
+    以及预测的类别得分（final_scores）和类别标签（final_class_ids），
+    再映射回原来的点云空间
+    将boxes、scores、labels保存到原来的ret_pred_dicts中
+    '''
 
     if circle_nms:
         # TODO: not checked yet
@@ -185,8 +208,8 @@ def decode_bbox_from_heatmap(heatmap, rot_cos, rot_sin, center, center_z, dim,
     final_class_ids = class_ids.view(batch_size, K)
 
     assert post_center_limit_range is not None
-    mask = (final_box_preds[..., :3] >= post_center_limit_range[:3]).all(2)
-    mask &= (final_box_preds[..., :3] <= post_center_limit_range[3:]).all(2)
+    mask = (final_box_preds[..., :3] >= post_center_limit_range[:3]).all(2)  # .all(2)表示与操作，也就是两个都要大于最小值
+    mask &= (final_box_preds[..., :3] <= post_center_limit_range[3:]).all(2) # 两个都要小于最大值
 
     if score_thresh is not None:
         mask &= (final_scores > score_thresh)
