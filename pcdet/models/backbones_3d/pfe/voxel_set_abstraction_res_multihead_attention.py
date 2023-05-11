@@ -199,7 +199,8 @@ class VoxelSetAbstraction_res_multihead_attention(nn.Module):
         '''
         self.trans_in = 640
         self.trans_out = 128
-        self.multihead_attention = MultiHeadAttention(8, self.trans_in, self.trans_out)
+        self.head = self.model_cfg.HEAD
+        self.multihead_attention = MultiHeadAttention(self.head,self.trans_in, self.trans_out)
         # self.w_qs = nn.Linear(self.trans_in, self.trans_out, bias=False)
         # self.w_ks = nn.Linear(self.trans_in, self.trans_out, bias=False)
         # self.w_vs = nn.Linear(self.trans_in, self.trans_out, bias=False)
