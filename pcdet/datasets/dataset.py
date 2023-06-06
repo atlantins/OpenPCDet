@@ -212,6 +212,7 @@ class DatasetTemplate(torch_data.Dataset):
         data_dict = self.set_lidar_aug_matrix(data_dict)
 
         # 筛选需要检测的gt_boxes
+        data_dict = self.set_lidar_aug_matrix(data_dict)
         if data_dict.get('gt_boxes', None) is not None:
             # 返回data_dict[gt_names]中存在于class_name的下标(np.array)
             selected = common_utils.keep_arrays_by_name(data_dict['gt_names'], self.class_names)
