@@ -6,7 +6,7 @@ DATA_CONFIG:
         DISABLE_AUG_LIST: ['placeholder']
         AUG_CONFIG_LIST:
             - NAME: gt_sampling
-              USE_ROAD_PLANE: False
+              USE_ROAD_PLANE: True
               DB_INFO_PATH:
                   - kitti_dbinfos_train.pkl
               PREPARE: {
@@ -47,7 +47,7 @@ MODEL:
 
         LAYER_NUMS: [5, 5]
         LAYER_STRIDES: [1, 2]
-        NUM_FILTERS: [128, 256] 
+        NUM_FILTERS: [128, 256]
         UPSAMPLE_STRIDES: [1, 2]
         NUM_UPSAMPLE_FILTERS: [256, 256]
 
@@ -229,7 +229,7 @@ MODEL:
 
 OPTIMIZATION:
     BATCH_SIZE_PER_GPU: 2
-    NUM_EPOCHS: 100
+    NUM_EPOCHS: 80
 
     OPTIMIZER: adam_onecycle
     LR: 0.01
