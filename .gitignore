@@ -17,3 +17,4 @@ output
 version.py
 !data/mini_kitti
 !pcdet/datasets/test_minikitti
+!tools/cfgs/kitti_models/**/*.yaml
