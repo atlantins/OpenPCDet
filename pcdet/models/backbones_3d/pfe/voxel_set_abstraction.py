@@ -535,8 +535,8 @@ class VoxelSetAbstraction(nn.Module):
         )
         """
         # point_features (2048 * batch, 640)-->(2048 * batch, 128)
-        # point_features = self.vsa_point_feature_fusion(point_features.view(-1, point_features.shape[-1]))
-        point_features = point_features.view(-1, point_features.shape[-1])
+        point_features = self.vsa_point_feature_fusion(point_features.view(-1, point_features.shape[-1]))
+        # point_features = point_features.view(-1, point_features.shape[-1])
 
         '''
         =========
@@ -546,7 +546,7 @@ class VoxelSetAbstraction(nn.Module):
         =========
         '''
         # point_features = point_features.permute()
-        point_features = self.attention(self.w_qs(point_features), self.w_ks(point_features), self.w_vs(point_features))
+        # point_features = self.attention(self.w_qs(point_features), self.w_ks(point_features), self.w_vs(point_features))
 
         # (batch*2048, C)
         batch_dict['point_features'] = point_features  # (BxN, C)

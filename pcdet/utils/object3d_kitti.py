@@ -17,6 +17,7 @@ def cls_type_to_id(cls_type):
 
 class Object3d(object):
     def __init__(self, line):
+        # Pedestrian 0.00 0 -0.20 712.40 143.00 810.73 307.92 1.89 0.48 1.20 1.84 1.47 8.41 0.01
         label = line.strip().split(' ')
         self.src = line
         self.cls_type = label[0]
