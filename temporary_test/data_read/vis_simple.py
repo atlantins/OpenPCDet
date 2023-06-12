@@ -18,5 +18,5 @@ def viz_mayavi(points, vals="distance"):
 
 
 if __name__ == '__main__':
-    points = np.fromfile('/home/xhj/OpenPCDet/data/kitti/training/velodyne/000004.bin', dtype=np.float32).reshape([-1, 4]) #test and val
+    points = np.fromfile('../../data/kitti/training/velodyne/0000001.bin', dtype=np.float32).reshape([-1, 4]) #test and val
     viz_mayavi(points)
