@@ -20,7 +20,7 @@ from train_utils.train_utils import train_model
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/pv_rcnn.yaml', help='specify the config for training')
+    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/pv_rcnn_point_head_attention.yaml', help='specify the config for training')
 
     parser.add_argument('--batch_size', type=int, default=None, required=False, help='batch size for training')
     parser.add_argument('--epochs', type=int, default=1, required=False, help='number of epochs to train for')
