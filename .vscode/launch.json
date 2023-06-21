@@ -5,6 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: train_point_head",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--cfg_file","cfgs/kitti_models/pv_rcnn_point_head_attention.yaml",
+            ],
+            "cwd":"${workspaceFolder}/tools",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",}
+        },
+        {
             "name": "Python: train_break_1",
             "type": "python",
             "request": "launch",
@@ -12,11 +26,13 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--cfg_file","cfgs/kitti_models/pv_rcnn.yaml",
+                "--cfg_file",
+                "cfgs/kitti_models/pv_rcnn.yaml",
             ],
-            "cwd":"${workspaceFolder}/tools",
+            "cwd": "${workspaceFolder}/tools",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}",}
+                "PYTHONPATH": "${workspaceFolder}",
+            }
         }
     ]
 }

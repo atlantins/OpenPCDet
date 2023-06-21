@@ -1,10 +1,23 @@
 import torch
+import torch.nn as nn
 
 from ...utils import box_utils
 from .point_head_template import PointHeadTemplate
 
-
-class PointHeadSimple(PointHeadTemplate):
+class CustomModle(nn.Module):
+    def __init__(self):
+        super(CustomModle, self).__init__()
+        self.attn = nn.MultiheadAttention(embed_dim=640,num_heads=8,dropout=0.5)
+        self.linear = nn.Linear(640,out_features=1)
+    
+    def forward(self,x):
+        x = x.unsqueeze(0)
+        x,_ = self.attn(x,x,x)
+        x = x.squeeze(0)
+        x = self.linear(x)
+        return x
+    
+class PointHeadSimple_Attention(PointHeadTemplate):
     """
     A simple point-based segmentation head, which are used for PV-RCNN keypoint segmentaion.
     Reference Paper: https://arxiv.org/abs/1912.13192
@@ -12,11 +25,8 @@ class PointHeadSimple(PointHeadTemplate):
     """
     def __init__(self, num_class, input_channels, model_cfg, **kwargs):
         super().__init__(model_cfg=model_cfg, num_class=num_class)
-        self.cls_layers = self.make_fc_layers(
-            fc_cfg=self.model_cfg.CLS_FC,
-            input_channels=input_channels,
-            output_channels=num_class
-        )
+        self.cls_module = CustomModle()
+
 
     def assign_targets(self, input_dict):
         """
@@ -75,8 +85,15 @@ class PointHeadSimple(PointHeadTemplate):
             point_features = batch_dict['point_features_before_fusion']
         else:
             point_features = batch_dict['point_features']
-        point_cls_preds = self.cls_layers(point_features)  # (total_points, num_class)
+        # print('==========================')
+        # print(point_features.shape)
+        point_cls_preds = self.cls_module.forward(point_features)
+        # # point_features = point_features.unsqueeze(0)
+        # point_cls_preds,_ = self.cls_layers(point_features, point_features, point_features)
+        # # point_features = point_features.squeeze(0)
+        # # point_cls_preds = self.linear1(point_features)
 
+        
         """
         前背景分类的MLP设置
             Sequential(

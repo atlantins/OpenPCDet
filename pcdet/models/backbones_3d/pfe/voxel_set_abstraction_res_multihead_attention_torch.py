@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 from ....ops.pointnet2.pointnet2_stack import pointnet2_modules as pointnet2_stack_modules
 from ....ops.pointnet2.pointnet2_stack import pointnet2_utils as pointnet2_stack_utils
 from ....utils import common_utils
@@ -135,7 +136,7 @@ def sector_fps(points, num_sampled_points, num_sectors):
     return sampled_points
 
 
-class VoxelSetAbstraction_res_multihead_attention(nn.Module):
+class VoxelSetAbstraction_res_multihead_attention_torch(nn.Module):
     def __init__(self, model_cfg, voxel_size, point_cloud_range, num_bev_features=None,
                  num_rawpoint_features=None, **kwargs):
         super().__init__()
@@ -184,26 +185,16 @@ class VoxelSetAbstraction_res_multihead_attention(nn.Module):
 
             c_in += cur_num_c_out
 
-        # self.vsa_point_feature_fusion = nn.Sequential(
-        #     nn.Linear(c_in, self.model_cfg.NUM_OUTPUT_FEATURES, bias=False),
-        #     nn.BatchNorm1d(self.model_cfg.NUM_OUTPUT_FEATURES),
-        #     nn.ReLU(),
-        # )
+        self.vsa_point_feature_fusion = nn.Sequential(
+            nn.Linear(c_in, self.model_cfg.NUM_OUTPUT_FEATURES, bias=False),
+            nn.BatchNorm1d(self.model_cfg.NUM_OUTPUT_FEATURES),
+            nn.ReLU(),
+        )
+
         self.num_point_features = self.model_cfg.NUM_OUTPUT_FEATURES
         self.num_point_features_before_fusion = c_in
 
-        '''
-        =========
-        attention
-        =========
-        '''
-        self.trans_in = 640
-        self.trans_out = 128
-        self.head = 8
-        self.multihead_attention = MultiHeadAttention(self.head,self.trans_in, self.trans_out)
-        # self.w_qs = nn.Linear(self.trans_in, self.trans_out, bias=False)
-        # self.w_ks = nn.Linear(self.trans_in, self.trans_out, bias=False)
-        # self.w_vs = nn.Linear(self.trans_in, self.trans_out, bias=False)
+        self.multihead_attn = nn.MultiheadAttention(embed_dim=640, num_heads=8, dropout=0.5)
         
     def interpolate_from_bev_features(self, keypoints, bev_features, batch_size, bev_stride):
         """    # 获取从BEV视角通过插值得到的关键点特征    把keypoint的值从spatial_features的值里面进行插值得出
@@ -536,7 +527,7 @@ class VoxelSetAbstraction_res_multihead_attention(nn.Module):
         )
         """
         # point_features (2048 * batch, 640)-->(2048 * batch, 128)
-        # point_features = self.vsa_point_feature_fusion(point_features.view(-1, point_features.shape[-1]))
+        
         point_features = point_features.view(-1, point_features.shape[-1])
 
         '''
@@ -546,66 +537,15 @@ class VoxelSetAbstraction_res_multihead_attention(nn.Module):
         只要最后变成2048*128就可以
         =========
         '''
-        # point_features = point_features.permute()
-        # q = self.w_qs(point_features)
-        # k = self.w_ks(point_features)
-        # v = self.w_vs(point_features)
-        point_features= self.multihead_attention(point_features, point_features, point_features)
+        point_features = point_features.unsqueeze(0)
+        # print(point_features.shape)
+        point_features, _ = self.multihead_attn(point_features, point_features, point_features)
+        point_features = point_features.squeeze(0)
+    
+        point_features = self.vsa_point_feature_fusion(point_features.view(-1, point_features.shape[-1]))
 
         # (batch*2048, C)
         batch_dict['point_features'] = point_features  # (BxN, C)
         # (batch*2048, 4)    4-->(batch_id, x, y, z)
         batch_dict['point_coords'] = keypoints  # (BxN, 4)
         return batch_dict
-
-class MultiHeadAttention(nn.Module):
-    ''' Multi-Head Attention module '''
-    def __init__(self, n_head, d_model_in, d_model_out,**kwargs):
-        super(MultiHeadAttention, self).__init__(**kwargs)
-        self.num_head = n_head
-        self.d_model_in = d_model_in
-        self.d_model_out = d_model_out
-        self.attention = DotProductAttention()
-        assert self.d_model_out % self.num_head ==0
-        self.W_q = nn.Linear(self.d_model_in,self.d_model_out,bias=False)
-        self.W_k = nn.Linear(self.d_model_in,self.d_model_out,bias=False)
-        self.W_v = nn.Linear(self.d_model_in,self.d_model_out,bias=False)
-        self.W_o = nn.Linear(self.d_model_out,self.d_model_out,bias=False)
-        
-        self.AddNorm = AddNorm(self.d_model_out)
-     
-    def forward(self, q, k, v):
-        # 进来的是(batch_size, channel)
-        num_head, d_model_out = self.num_head, self.d_model_out
-        b_size = q.size(0)
-        res = self.W_q(q)
-        q = res.view(b_size, num_head, d_model_out//num_head)
-        # print(q.shape)
-        k = self.W_k(k).view(b_size, num_head, d_model_out//num_head)
-        v = self.W_v(v).view(b_size, num_head, d_model_out//num_head)
-        out = self.attention(q,k,v)
-        out = out.contiguous().view(b_size,-1)
-        # print('==========')
-        out = self.W_o(out)
-        out = self.AddNorm(res,out)
-        return out
-
-class AddNorm(nn.Module):
-    def __init__(self,normalized_shape):
-        super(AddNorm,self).__init__()
-        self.dropout = nn.Dropout(0.5)
-        self.layernorm = nn.LayerNorm(normalized_shape)
-    
-    def forward(self,x,y):
-        return self.layernorm(self.dropout(y)+x)
-
-class DotProductAttention(nn.Module):
-    def __init__(self, dropout=0.5, **kwargs):
-        super(DotProductAttention, self).__init__(**kwargs)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, q, k, v):
-        attn = q @ k.transpose(-1, -2)
-        attn = F.softmax(attn / np.sqrt(k.size(-1)), dim=-1)
-        output = self.dropout(attn) @ v
-        return output
