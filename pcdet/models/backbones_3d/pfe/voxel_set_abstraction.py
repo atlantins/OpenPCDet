@@ -191,18 +191,6 @@ class VoxelSetAbstraction(nn.Module):
         )
         self.num_point_features = self.model_cfg.NUM_OUTPUT_FEATURES
         self.num_point_features_before_fusion = c_in
-
-        '''
-        =========
-        attention
-        =========
-        '''
-        self.attention = Attention()
-        self.trans_in = 640
-        self.trans_out = 128
-        self.w_qs = nn.Linear(self.trans_in, self.trans_out, bias=False)
-        self.w_ks = nn.Linear(self.trans_in, self.trans_out, bias=False)
-        self.w_vs = nn.Linear(self.trans_in, self.trans_out, bias=False)
         
     def interpolate_from_bev_features(self, keypoints, bev_features, batch_size, bev_stride):
         """ 获取从BEV视角通过插值得到的关键点特征    把keypoint的值从spatial_features的值里面进行插值得出
@@ -553,21 +541,3 @@ class VoxelSetAbstraction(nn.Module):
         # (batch*2048, 4)    4-->(batch_id, x, y, z)
         batch_dict['point_coords'] = keypoints  # (BxN, 4)
         return batch_dict
-
-
-def dot_attention(self):
-    nn.Dotproduction
-
-def mult_attention():
-    pass
-
-class Attention(nn.Module):
-    def __init__(self):
-        super().__init__()
-        
-    def forward(self, q, k, v):
-        attn = q @ k.transpose(-1, -2)
-        attn = F.softmax(attn / np.sqrt(k.size(-1)), dim=-1)
-        output = attn @ v
-
-        return output, attn
