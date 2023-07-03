@@ -537,8 +537,9 @@ class VoxelSetAbstraction_res_multihead_attention_torch(nn.Module):
         只要最后变成2048*128就可以
         =========
         '''
-        point_features = point_features.unsqueeze(0)
-        # print(point_features.shape)
+        point_features = point_features.unsqueeze(0) # 1,4096,640
+        print('================================================')
+        print(point_features.shape)
         point_features, _ = self.multihead_attn(point_features, point_features, point_features)
         point_features = point_features.squeeze(0)
     

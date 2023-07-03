@@ -4,7 +4,9 @@ from .voxel_set_abstraction_res_multihead_attention_torch import VoxelSetAbstrac
 from .voxel_set_abstraction_crossattention import VoxelSetAbstraction_crossattention,VoxelSetAbstraction_crossattention_v1
 from .voxel_set_abstraction_crossattention import VoxelSetAbstraction_crossattention,VoxelSetAbstraction_crossattention_v2
 from .voxel_set_abstraction_crossattention import VoxelSetAbstraction_crossattention,VoxelSetAbstraction_crossattention_v3
-
+from .voxel_set_abstraction_res_cross_attention_torch import VoxelSetAbstraction_res_cross_attention_torch
+from .voxel_set_abstraction_res_cross_attention_torch import VoxelSetAbstraction_res_cross_attention_torch_v2
+from .voxel_set_abstraction_res_cross_attention_torch import VoxelSetAbstraction_res_cross_attention_torch_v3
 __all__ = {
     'VoxelSetAbstraction': VoxelSetAbstraction,
     'VoxelSetAbstraction_res_multihead_attention': VoxelSetAbstraction_res_multihead_attention,
@@ -13,4 +15,7 @@ __all__ = {
     'VoxelSetAbstraction_crossattention_v2':VoxelSetAbstraction_crossattention_v2,
     'VoxelSetAbstraction_crossattention_v3':VoxelSetAbstraction_crossattention_v3,
     'VoxelSetAbstraction_res_multihead_attention_torch':VoxelSetAbstraction_res_multihead_attention_torch,
+    'VoxelSetAbstraction_res_cross_attention_torch':VoxelSetAbstraction_res_cross_attention_torch,
+    'VoxelSetAbstraction_res_cross_attention_torch_v2':VoxelSetAbstraction_res_cross_attention_torch_v2,
+    'VoxelSetAbstraction_res_cross_attention_torch_v3':VoxelSetAbstraction_res_cross_attention_torch_v3,
 }
